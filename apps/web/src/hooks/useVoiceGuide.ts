@@ -29,6 +29,13 @@ export interface ExtensionPageContext {
   capturedAt: string;
 }
 
+export interface ExtensionBridgeStatus {
+  connected: boolean;
+  refreshing: boolean;
+  message: string;
+  lastUpdatedAt: string | null;
+}
+
 let messageId = 0;
 
 function isStringArray(value: unknown): value is string[] {
@@ -90,11 +97,18 @@ export function useVoiceGuide() {
   const [voiceRate, setVoiceRate] = useState(1);
   const [voiceOutputOn, setVoiceOutputOn] = useState(true);
 
-  const [mode, setMode] = useState<GuideMode>('ask');
+  const [mode, setMode] = useState<GuideMode>('coach');
   const [selectedToolId, setSelectedToolId] = useState<string>('');
 
   const [extensionContext, setExtensionContext] =
     useState<ExtensionPageContext | null>(null);
+  const [extensionBridgeStatus, setExtensionBridgeStatus] =
+    useState<ExtensionBridgeStatus>({
+      connected: false,
+      refreshing: false,
+      message: 'Chrome 탭 연결 대기 중',
+      lastUpdatedAt: null,
+    });
   const [manualDescription, setManualDescription] = useState('');
   const [screenshotName, setScreenshotName] = useState<string | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
@@ -111,22 +125,28 @@ export function useVoiceGuide() {
 
   const sttRef = useRef<WebSpeechSTTProvider | null>(null);
   const lastResponseRef = useRef<GuideResponse | null>(null);
+  const pendingExtensionRequestsRef = useRef(
+    new Map<string, (context: ExtensionPageContext | null) => void>(),
+  );
+  const extensionRequestTimeoutsRef = useRef(new Map<string, number>());
 
   /* --------------------------- Context assembly -------------------------- */
 
-  const buildRawContext = useCallback((): ScreenContext | null => {
+  const buildRawContext = useCallback((overrideExtensionContext?: ExtensionPageContext | null): ScreenContext | null => {
     if (!contextSharingOn) return null;
+    const activeExtensionContext =
+      overrideExtensionContext === undefined ? extensionContext : overrideExtensionContext;
     const hasAnything =
-      extensionContext || manualDescription.trim() || screenshotName;
+      activeExtensionContext || manualDescription.trim() || screenshotName;
     if (!hasAnything) return null;
     return {
-      source: extensionContext ? 'browser-extension' : screenshotName ? 'screenshot' : 'manual',
+      source: activeExtensionContext ? 'browser-extension' : screenshotName ? 'screenshot' : 'manual',
       capturedAt: new Date().toISOString(),
-      browser: extensionContext
+      browser: activeExtensionContext
         ? {
-            url: extensionContext.url,
-            title: extensionContext.title,
-            domSummary: extensionContext.domSummary,
+            url: activeExtensionContext.url,
+            title: activeExtensionContext.title,
+            domSummary: activeExtensionContext.domSummary,
           }
         : undefined,
       activeWindowTitle: manualDescription.trim() || undefined,
@@ -151,22 +171,117 @@ export function useVoiceGuide() {
 
   /* --------------------------- Extension bridge -------------------------- */
 
+  const resolveExtensionRequest = useCallback(
+    (requestId: string, context: ExtensionPageContext | null): void => {
+      const resolve = pendingExtensionRequestsRef.current.get(requestId);
+      if (!resolve) return;
+      pendingExtensionRequestsRef.current.delete(requestId);
+      const timeout = extensionRequestTimeoutsRef.current.get(requestId);
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      extensionRequestTimeoutsRef.current.delete(requestId);
+      resolve(context);
+    },
+    [],
+  );
+
+  const requestExtensionContext = useCallback(
+    (
+      type: 'voiceguide:request-extension-context' | 'voiceguide:refresh-target-context',
+      silent = false,
+    ): Promise<ExtensionPageContext | null> => {
+      const requestId = `vg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      if (!silent) {
+        setExtensionBridgeStatus((prev) => ({
+          ...prev,
+          refreshing: true,
+          message: type === 'voiceguide:refresh-target-context'
+            ? '연결된 Chrome 탭을 다시 읽는 중'
+            : 'Chrome 탭 컨텍스트를 불러오는 중',
+        }));
+      }
+      return new Promise((resolve) => {
+        pendingExtensionRequestsRef.current.set(requestId, resolve);
+        const timeout = window.setTimeout(() => {
+          resolveExtensionRequest(requestId, null);
+          if (!silent) {
+            setExtensionBridgeStatus((prev) => ({
+              ...prev,
+              refreshing: false,
+              message: '확장 응답이 없습니다. 대상 사이트에서 VoiceGuide 확장 아이콘으로 탭을 연결하세요.',
+            }));
+          }
+        }, 1500);
+        extensionRequestTimeoutsRef.current.set(requestId, timeout);
+        window.postMessage({ type, requestId }, window.location.origin);
+      });
+    },
+    [resolveExtensionRequest],
+  );
+
+  const loadStoredExtensionContext = useCallback(
+    (silent = false): Promise<ExtensionPageContext | null> =>
+      requestExtensionContext('voiceguide:request-extension-context', silent),
+    [requestExtensionContext],
+  );
+
+  const refreshActiveTabContext = useCallback(
+    (silent = false): Promise<ExtensionPageContext | null> =>
+      requestExtensionContext('voiceguide:refresh-target-context', silent),
+    [requestExtensionContext],
+  );
+
   useEffect(() => {
     const listener = (event: MessageEvent): void => {
       if (event.source !== window) return;
       const data = event.data as
-        | { type?: string; payload?: unknown }
+        | { type?: string; payload?: unknown; requestId?: unknown; ok?: unknown; message?: unknown }
         | undefined;
+      const requestId =
+        typeof data?.requestId === 'string' ? data.requestId : undefined;
       if (
         data?.type === 'voiceguide:context' &&
         isExtensionPageContext(data.payload)
       ) {
         setExtensionContext(data.payload);
+        setExtensionBridgeStatus({
+          connected: true,
+          refreshing: false,
+          message: 'Chrome 탭 연결됨',
+          lastUpdatedAt: data.payload.capturedAt,
+        });
+        if (requestId) resolveExtensionRequest(requestId, data.payload);
+      }
+      if (data?.type === 'voiceguide:extension-status') {
+        const ok = data.ok === true;
+        const message =
+          typeof data.message === 'string'
+            ? data.message
+            : ok
+              ? 'Chrome 확장 상태가 갱신되었습니다.'
+              : 'Chrome 확장 요청에 실패했습니다.';
+        setExtensionBridgeStatus((prev) => ({
+          ...prev,
+          connected: ok ? prev.connected : false,
+          refreshing: false,
+          message,
+        }));
+        if (!ok && requestId) resolveExtensionRequest(requestId, null);
       }
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, []);
+  }, [resolveExtensionRequest]);
+
+  useEffect(() => {
+    void loadStoredExtensionContext(true);
+    return () => {
+      for (const timeout of extensionRequestTimeoutsRef.current.values()) {
+        window.clearTimeout(timeout);
+      }
+      extensionRequestTimeoutsRef.current.clear();
+      pendingExtensionRequestsRef.current.clear();
+    };
+  }, [loadStoredExtensionContext]);
 
   /* ------------------------------ Server ping ---------------------------- */
 
@@ -192,9 +307,16 @@ export function useVoiceGuide() {
         { id: ++messageId, role: 'user', text },
       ]);
       try {
+        let latestExtensionContext = extensionContext;
+        if (contextSharingOn) {
+          const refreshed = extensionContext
+            ? await refreshActiveTabContext(true)
+            : await loadStoredExtensionContext(true);
+          if (refreshed) latestExtensionContext = refreshed;
+        }
         const response = await orchestrator.handleUtterance(
           text,
-          buildRawContext(),
+          buildRawContext(latestExtensionContext),
           {
             userSelectedToolId: autoDetect ? undefined : selectedToolId || undefined,
             mode,
@@ -225,7 +347,21 @@ export function useVoiceGuide() {
         setBusy(false);
       }
     },
-    [busy, orchestrator, buildRawContext, autoDetect, selectedToolId, mode, tts, voiceRate, voiceOutputOn],
+    [
+      busy,
+      orchestrator,
+      extensionContext,
+      contextSharingOn,
+      refreshActiveTabContext,
+      loadStoredExtensionContext,
+      buildRawContext,
+      autoDetect,
+      selectedToolId,
+      mode,
+      tts,
+      voiceRate,
+      voiceOutputOn,
+    ],
   );
 
   /* ------------------------------ Microphone ----------------------------- */
@@ -339,6 +475,12 @@ export function useVoiceGuide() {
     setScreenshotPreview(null);
     setRedactedPreview(null);
     setFindings([]);
+    setExtensionBridgeStatus({
+      connected: false,
+      refreshing: false,
+      message: 'Chrome 탭 연결 대기 중',
+      lastUpdatedAt: null,
+    });
     window.postMessage({ type: 'voiceguide:clear-context' }, window.location.origin);
   }, [orchestrator]);
 
@@ -376,6 +518,9 @@ export function useVoiceGuide() {
     manualDescription,
     setManualDescription,
     extensionContext,
+    extensionBridgeStatus,
+    refreshActiveTabContext,
+    loadStoredExtensionContext,
     clearContext,
     redactedPreview,
     findings,

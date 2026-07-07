@@ -16,52 +16,78 @@ interface CollectedContext {
   capturedAt: string;
 }
 
+interface TargetTab {
+  tabId: number;
+  windowId?: number;
+  url?: string;
+  title?: string;
+  grantedAt: string;
+}
+
+const POPUP_CONTEXT_KEY = 'voiceguideContext';
+const POPUP_TARGET_KEY = 'voiceguideTarget';
+
 /** Runs inside the inspected page via chrome.scripting.executeScript.
  *  Must be self-contained. Never reads input values — labels only. */
 function collectDomSummaryInPage(): CollectedContext['domSummary'] {
   const clean = (s: string | null | undefined): string =>
-    (s ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    (s ?? '').replace(/\s+/g, ' ').trim().slice(0, 90);
+  const isVisible = (el: Element): boolean => {
+    const he = el as HTMLElement;
+    const style = window.getComputedStyle(he);
+    return (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      he.getClientRects().length > 0
+    );
+  };
   const takeVisibleTexts = (selector: string, limit: number): string[] => {
     const out: string[] = [];
     for (const el of Array.from(document.querySelectorAll(selector))) {
       if (out.length >= limit) break;
+      if (!isVisible(el)) continue;
       const he = el as HTMLElement;
-      if (he.offsetParent === null && he.tagName !== 'BODY') continue;
       const label =
         clean(he.innerText) ||
         clean(he.getAttribute('aria-label')) ||
-        clean(he.getAttribute('title'));
+        clean(he.getAttribute('title')) ||
+        clean(he.getAttribute('value'));
       if (label && !out.includes(label)) out.push(label);
     }
     return out;
   };
   const inputs: string[] = [];
   for (const el of Array.from(
-    document.querySelectorAll('input:not([type=password]):not([type=hidden]), textarea, select'),
+    document.querySelectorAll('input:not([type=hidden]), textarea, select'),
   )) {
-    if (inputs.length >= 15) break;
+    if (inputs.length >= 20) break;
+    if (!isVisible(el)) continue;
     const he = el as HTMLInputElement;
     // Only field labels/placeholders — never the value the user typed.
     const label =
       clean(he.getAttribute('aria-label')) ||
       clean(he.getAttribute('placeholder')) ||
-      clean(he.getAttribute('name'));
+      clean(he.getAttribute('name')) ||
+      (he.type === 'password' ? 'Password' : '');
     if (label && !inputs.includes(label)) inputs.push(label);
   }
   return {
-    headings: takeVisibleTexts('h1, h2, h3', 10),
-    buttons: takeVisibleTexts('button, [role=button], input[type=submit]', 25),
-    links: takeVisibleTexts('a[href]', 25),
+    headings: takeVisibleTexts('h1, h2, h3', 12),
+    buttons: takeVisibleTexts('button, [role=button], input[type=submit], input[type=button]', 30),
+    links: takeVisibleTexts('a[href]', 30),
     inputs,
-    landmarks: takeVisibleTexts('nav, main, aside, header, footer', 0).length
-      ? Array.from(
-          new Set(
-            Array.from(
-              document.querySelectorAll('nav, main, aside, header, footer'),
-            ).map((el) => el.tagName.toLowerCase()),
-          ),
+    landmarks: Array.from(
+      new Set(
+        Array.from(
+          document.querySelectorAll('nav, main, aside, header, footer, [role=navigation], [role=main]'),
         )
-      : [],
+          .filter(isVisible)
+          .map((el) => {
+            const role = el.getAttribute('role');
+            return role ? `role=${role}` : el.tagName.toLowerCase();
+          }),
+      ),
+    ).slice(0, 10),
   };
 }
 
@@ -74,6 +100,7 @@ const openBtn = document.getElementById('open') as HTMLButtonElement;
 const statusEl = document.getElementById('status')!;
 
 let collected: CollectedContext | null = null;
+let target: TargetTab | null = null;
 
 function safePageUrl(rawUrl: string): string {
   try {
@@ -116,10 +143,17 @@ collectBtn.addEventListener('click', () => {
         domSummary: result?.result as CollectedContext['domSummary'],
         capturedAt: new Date().toISOString(),
       };
+      target = {
+        tabId: tab.id,
+        windowId: tab.windowId,
+        url: collected.url,
+        title: collected.title,
+        grantedAt: new Date().toISOString(),
+      };
       previewEl.style.display = 'block';
       previewEl.textContent = JSON.stringify(collected, null, 2);
       sendBtn.disabled = false;
-      statusEl.textContent = '수집 완료. 내용을 확인한 뒤 전송하세요.';
+      statusEl.textContent = '현재 탭을 읽었습니다. VoiceGuide로 연결할 수 있습니다.';
     } catch (err) {
       statusEl.textContent = `수집 실패: ${(err as Error).message}`;
     }
@@ -128,9 +162,13 @@ collectBtn.addEventListener('click', () => {
 
 sendBtn.addEventListener('click', () => {
   void (async () => {
-    if (!collected) return;
-    await chrome.storage.local.set({ voiceguideContext: collected });
-    statusEl.textContent = 'VoiceGuide로 전달했습니다. VoiceGuide 탭을 확인하세요.';
+    if (!collected || !target) return;
+    await chrome.storage.local.set({
+      [POPUP_CONTEXT_KEY]: collected,
+      [POPUP_TARGET_KEY]: target,
+    });
+    statusEl.textContent = 'VoiceGuide에 연결했습니다.';
+    await chrome.tabs.create({ url: 'http://localhost:5173' });
   })();
 });
 
