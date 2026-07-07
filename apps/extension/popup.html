@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 14px;
+        font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+        background: #1a1d29;
+        color: #e8eaf2;
+        font-size: 13px;
+      }
+      h1 { font-size: 15px; margin: 0 0 10px; color: #7c9cff; }
+      .page { background: #222636; border-radius: 8px; padding: 8px 10px; word-break: break-all; }
+      .page small { color: #9aa0b4; }
+      button {
+        width: 100%; margin-top: 8px; padding: 9px; border-radius: 8px;
+        border: 1px solid #2c3145; background: #222636; color: #e8eaf2;
+        cursor: pointer; font-size: 13px;
+      }
+      button:hover { border-color: #7c9cff; }
+      button.primary { background: #7c9cff; color: #10131f; font-weight: 600; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      #preview {
+        background: #0d0f16; border-radius: 8px; padding: 8px; margin-top: 8px;
+        max-height: 140px; overflow: auto; font-size: 11px; white-space: pre-wrap;
+        display: none;
+      }
+      .note { color: #9aa0b4; font-size: 11px; margin-top: 10px; }
+      #status { color: #5fd4a2; margin-top: 8px; min-height: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>VoiceGuide Companion</h1>
+    <div class="page">
+      <div id="tab-title">현재 탭 확인 중…</div>
+      <small id="tab-url"></small>
+    </div>
+    <button id="collect">1️⃣ 이 페이지 정보 수집 (동의)</button>
+    <pre id="preview"></pre>
+    <button id="send" class="primary" disabled>2️⃣ VoiceGuide로 보내기</button>
+    <button id="open">VoiceGuide 열기 (localhost:5173)</button>
+    <div id="status"></div>
+    <p class="note">
+      수집 버튼을 누른 경우에만 현재 탭의 제목, 주소, 화면 요약(버튼/제목 텍스트)을
+      읽습니다. 비밀번호 입력값은 절대 수집하지 않으며, 데이터는 브라우저 안에서만
+      VoiceGuide 앱으로 전달됩니다.
+    </p>
+    <script src="dist/popup.js"></script>
+  </body>
+</html>

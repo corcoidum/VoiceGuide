@@ -1,0 +1,28 @@
+{
+  "name": "voiceguide",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VoiceGuide - AI voice guide that helps users learn unfamiliar programs and web services step by step",
+  "workspaces": [
+    "packages/*",
+    "apps/web",
+    "apps/server",
+    "apps/extension"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@voiceguide/web",
+    "dev:server": "npm run dev --workspace=@voiceguide/server",
+    "build": "npm run build --workspace=@voiceguide/core && npm run build --workspace=@voiceguide/server && npm run build --workspace=@voiceguide/web && npm run build --workspace=@voiceguide/extension",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "desktop:proto": "node apps/desktop/prototype/active-window.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "esbuild@0.21.5": true
+  }
+}
