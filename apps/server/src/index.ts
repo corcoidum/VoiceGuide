@@ -20,6 +20,8 @@ const ALLOWED_ORIGINS = new Set(
     .map((origin) => origin.trim())
     .filter(Boolean),
 );
+const ALLOW_LOCAL_DEV_ORIGINS =
+  (process.env['VOICEGUIDE_ALLOW_LOCAL_DEV_ORIGINS'] ?? 'true') !== 'false';
 const INTENTS = new Set<Intent>([
   'ask_how',
   'done',
@@ -69,10 +71,23 @@ function requestOrigin(req: import('node:http').IncomingMessage): string | null 
   return typeof origin === 'string' ? origin : null;
 }
 
+function isLocalDevOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      ALLOW_LOCAL_DEV_ORIGINS &&
+      url.protocol === 'http:' &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedOrigin(req: import('node:http').IncomingMessage): boolean {
   const origin = requestOrigin(req);
   // curl, same-origin proxy, server-to-server 호출은 보통 Origin 헤더가 없습니다.
-  return origin === null || ALLOWED_ORIGINS.has(origin);
+  return origin === null || ALLOWED_ORIGINS.has(origin) || isLocalDevOrigin(origin);
 }
 
 function responseHeaders(req: import('node:http').IncomingMessage): Record<string, string> {
@@ -83,7 +98,7 @@ function responseHeaders(req: import('node:http').IncomingMessage): Record<strin
     'access-control-allow-methods': 'GET,POST,OPTIONS',
   };
   const origin = requestOrigin(req);
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && (ALLOWED_ORIGINS.has(origin) || isLocalDevOrigin(origin))) {
     headers['access-control-allow-origin'] = origin;
   }
   return headers;

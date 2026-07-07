@@ -80,6 +80,111 @@ function goalKeywords(goal: string): string[] {
     .filter((w) => w.length >= 2 && !GOAL_STOPWORDS.has(w));
 }
 
+const SYNONYM_GROUPS = [
+  ['새', '만들', '생성', '추가', 'new', 'create', 'add', 'plus', '+'],
+  ['저장소', 'repository', 'repo'],
+  ['프로젝트', 'project'],
+  ['문서', 'document', 'doc'],
+  ['파일', 'file'],
+  ['설정', 'setting', 'settings', 'preferences', 'preference'],
+  ['로그인', 'login', 'log in', 'sign in', 'signin'],
+  ['가입', 'register', 'sign up', 'signup', 'create account'],
+  ['검색', 'search', 'find'],
+  ['업로드', 'upload', 'import'],
+  ['다운로드', 'download', 'export'],
+  ['결제', 'payment', 'billing', 'invoice'],
+  ['계정', 'account', 'profile', '프로필'],
+  ['도움', 'help', 'support', 'docs', 'documentation'],
+  ['공유', 'share', 'invite'],
+  ['저장', 'save'],
+  ['제출', 'submit', 'send', 'continue', 'next', '다음', '계속'],
+];
+
+type CandidateKind = 'button' | 'link' | 'input';
+
+interface ElementCandidate {
+  label: string;
+  kind: CandidateKind;
+  score: number;
+}
+
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}+]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function expandKeywords(goal: string): string[] {
+  const lower = goal.toLowerCase();
+  const set = new Set(goalKeywords(goal));
+  for (const group of SYNONYM_GROUPS) {
+    if (group.some((term) => lower.includes(term))) {
+      for (const term of group) set.add(term);
+    }
+  }
+  return [...set]
+    .map((term) => normalize(term))
+    .filter((term) => term.length > 0);
+}
+
+function scoreLabel(label: string, keywords: string[]): number {
+  const normalizedLabel = normalize(label);
+  if (!normalizedLabel) return 0;
+  let score = 0;
+  for (const keyword of keywords) {
+    if (!keyword) continue;
+    if (normalizedLabel === keyword) {
+      score += 5;
+    } else if (normalizedLabel.includes(keyword)) {
+      score += keyword.length >= 4 ? 3 : 2;
+    } else if (
+      keyword.includes(' ') &&
+      keyword.split(' ').every((part) => normalizedLabel.includes(part))
+    ) {
+      score += 2;
+    }
+  }
+  return score;
+}
+
+function bestCandidate(
+  labels: { label: string; kind: CandidateKind; weight: number }[],
+  keywords: string[],
+): ElementCandidate | null {
+  let best: ElementCandidate | null = null;
+  for (const item of labels) {
+    const score = scoreLabel(item.label, keywords) + item.weight;
+    if (score > item.weight && (!best || score > best.score)) {
+      best = { label: item.label, kind: item.kind, score };
+    }
+  }
+  return best;
+}
+
+function candidateNoun(kind: CandidateKind): string {
+  switch (kind) {
+    case 'button':
+      return '버튼';
+    case 'link':
+      return '링크';
+    case 'input':
+      return '입력칸';
+  }
+}
+
+function actionForCandidate(candidate: ElementCandidate): string {
+  if (candidate.kind === 'input') {
+    return `"${candidate.label}" 입력칸을 선택하고 필요한 내용을 입력하세요.`;
+  }
+  return `화면에서 "${candidate.label}" ${candidateNoun(candidate.kind)}을 찾아 눌러보세요.`;
+}
+
+function likelyFormGoal(goal: string): boolean {
+  return /로그인|가입|검색|입력|작성|제출|login|sign in|sign up|search|submit|form/i.test(goal);
+}
+
 export interface GenericPlanResult {
   step: GuideStep;
   confidence: number;
@@ -99,40 +204,72 @@ export function planGenericStep(request: GuideLLMRequest): GenericPlanResult {
     context?.browser?.title ??
     context?.activeWindowTitle ??
     '알 수 없는 화면';
-  const keywords = goalKeywords(request.goal || request.utterance);
+  const goal = request.goal || request.utterance;
+  const keywords = expandKeywords(goal);
 
   // Try to find a visible button/link whose label matches the goal.
   if (dom) {
-    const candidates = [...dom.buttons, ...dom.links];
-    const hit = candidates.find((label) =>
-      keywords.some((k) => label.toLowerCase().includes(k)),
+    const hit = bestCandidate(
+      [
+        ...dom.buttons.map((label) => ({ label, kind: 'button' as const, weight: 1.5 })),
+        ...dom.links.map((label) => ({ label, kind: 'link' as const, weight: 1 })),
+        ...dom.inputs.map((label) => ({ label, kind: 'input' as const, weight: 0.8 })),
+      ],
+      keywords,
     );
     if (hit) {
-      const isButton = dom.buttons.includes(hit);
       return {
         step: {
           situation: `현재 "${where}" 화면입니다. 목표와 관련된 요소를 화면에서 확인했습니다.`,
-          action: `화면에서 "${hit}" ${isButton ? '버튼' : '링크'}을 찾아 눌러보세요.`,
-          uiHint: `"${hit}"라는 문구가 표시된 ${isButton ? '버튼' : '링크'}입니다.`,
-          successCheck: '누른 뒤 화면이 바뀌거나 새 창/영역이 나타나야 합니다.',
+          action: actionForCandidate(hit),
+          uiHint: `"${hit.label}"라는 문구가 표시된 ${candidateNoun(hit.kind)}입니다.`,
+          successCheck:
+            hit.kind === 'input'
+              ? '입력 커서가 나타나고 입력한 내용이 해당 칸에 표시되어야 합니다.'
+              : '누른 뒤 화면이 바뀌거나 새 창/영역이 나타나야 합니다.',
           fallback:
             '보이지 않으면 화면을 아래로 스크롤하거나, 메뉴(☰) 아이콘을 열어 같은 이름의 항목을 찾아보세요.',
           confirmQuestion: '눌렀다면 "완료했어", 찾지 못했다면 "못 찾겠어"라고 말해주세요.',
         },
-        confidence: 0.75,
+        confidence: Math.min(0.9, 0.62 + hit.score / 20),
         evidence: [
-          `페이지 DOM에서 "${hit}" 요소를 직접 확인했습니다.`,
+          `페이지 DOM에서 "${hit.label}" ${candidateNoun(hit.kind)}을 직접 확인했습니다.`,
           `현재 페이지: ${where}`,
         ],
         askedForClarification: false,
       };
     }
 
+    if (request.genericStepIndex > 0 && likelyFormGoal(goal) && dom.inputs.length > 0) {
+      const firstInput = dom.inputs[0]!;
+      return {
+        step: {
+          situation: `현재 "${where}" 화면입니다. 이전 단계 뒤에 입력 양식이 보입니다.`,
+          action: `"${firstInput}" 입력칸부터 선택해 내용을 입력하세요.`,
+          uiHint: `"${firstInput}"라는 라벨 또는 자리표시자가 있는 입력칸입니다.`,
+          successCheck: '입력한 내용이 칸에 보이고 다음으로 이동할 수 있어야 합니다.',
+          fallback:
+            '입력칸이 보이지 않으면 페이지 상단부터 차례로 Tab 키를 눌러 포커스가 이동하는지 확인해보세요.',
+          confirmQuestion: '입력했으면 "완료했어", 막히면 지금 보이는 입력칸 이름을 말해주세요.',
+        },
+        confidence: 0.58,
+        evidence: [
+          `페이지 DOM에서 "${firstInput}" 입력칸을 직접 확인했습니다.`,
+          '이전 단계 완료 후 양식 입력 단계로 판단했습니다.',
+        ],
+        askedForClarification: false,
+      };
+    }
+
     // DOM available but nothing matches: be honest, suggest observed entry points.
-    const entryPoints = [...dom.buttons.slice(0, 3), ...dom.landmarks.slice(0, 2)];
+    const entryPoints = [
+      ...dom.buttons.slice(0, 3),
+      ...dom.links.slice(0, 2),
+      ...dom.inputs.slice(0, 2),
+    ];
     return {
       step: {
-        situation: `현재 "${where}" 화면입니다. 목표("${request.goal || request.utterance}")와 직접 일치하는 요소는 화면에서 확인하지 못했습니다.`,
+        situation: `현재 "${where}" 화면입니다. 목표("${goal}")와 직접 일치하는 요소는 화면에서 확인하지 못했습니다.`,
         action:
           entryPoints.length > 0
             ? `화면에 실제로 보이는 항목은 ${entryPoints.map((e) => `"${e}"`).join(', ')} 등입니다. 이 중 목표와 가장 관련 있어 보이는 것을 알려주시거나, 화면 상단의 메뉴/설정 아이콘을 열어보세요.`

@@ -78,6 +78,31 @@ describe('planGenericStep (Generic Guide Mode)', () => {
     expect(r.evidence.join(' ')).toContain('직접 확인');
   });
 
+  it('bridges Korean goals to English UI labels using observed DOM only', () => {
+    const r = planGenericStep(genericRequest(domContext, '새 프로젝트 만들려면?'));
+    expect(r.step.action).toContain('New Project');
+    expect(r.evidence.join(' ')).toContain('New Project');
+  });
+
+  it('can guide toward an observed input field', () => {
+    const searchContext: ScreenContext = {
+      ...domContext,
+      browser: {
+        ...domContext.browser!,
+        domSummary: {
+          headings: ['Dashboard'],
+          buttons: ['Submit'],
+          links: [],
+          inputs: ['Search projects'],
+          landmarks: ['main'],
+        },
+      },
+    };
+    const r = planGenericStep(genericRequest(searchContext, '프로젝트를 검색하고 싶어'));
+    expect(r.step.action).toContain('Search projects');
+    expect(r.step.uiHint).toContain('입력칸');
+  });
+
   it('never invents a button — asks the user when the DOM has no match', () => {
     const r = planGenericStep(genericRequest(domContext, '결제 수단을 바꾸고 싶어'));
     expect(r.askedForClarification).toBe(true);

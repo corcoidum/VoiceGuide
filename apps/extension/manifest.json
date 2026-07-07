@@ -4,13 +4,16 @@
   "version": "0.1.0",
   "description": "현재 페이지의 URL·제목·화면 요약을 사용자 동의하에 VoiceGuide로 전달합니다. 특정 사이트 전체 접근 권한을 요구하지 않습니다.",
   "permissions": ["activeTab", "scripting", "storage"],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "VoiceGuide로 이 페이지 배우기"
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost:5173/*", "http://127.0.0.1:5173/*"],
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
       "js": ["dist/bridge-content.js"],
       "run_at": "document_idle"
     }

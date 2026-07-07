@@ -30,8 +30,9 @@ npm run desktop:proto # Windows 활성 창 감지 prototype
 1. `npm run build` 실행 (extension의 `dist/` 생성)
 2. Chrome → `chrome://extensions` → 개발자 모드 ON
 3. "압축해제된 확장 프로그램 로드" → `apps/extension` 폴더 선택
-4. 배우고 싶은 사이트에서 확장 아이콘 클릭 → **1️⃣ 페이지 정보 수집(동의)**
-   → 미리보기 확인 → **2️⃣ VoiceGuide로 보내기**
+4. 배우고 싶은 사이트에서 확장 아이콘 클릭 → **현재 탭 읽기**
+   → 미리보기 확인 → **VoiceGuide에 연결하고 열기**
+5. VoiceGuide 앱에서 질문하면 연결된 Chrome 탭을 다시 읽어 최신 DOM 기준으로 안내합니다.
 
 ### 실제 LLM 연결 (선택)
 
@@ -141,7 +142,7 @@ voiceguide/
 | 플랫폼 | 제한 |
 |---|---|
 | Web | 음성 인식은 Chrome/Edge 필요 (Firefox/Safari는 텍스트 입력 사용) |
-| Extension | `chrome://`, 웹스토어 등 특수 페이지에서는 수집 불가 |
+| Extension | `chrome://`, 웹스토어 등 특수 페이지에서는 수집 불가. 연결한 탭이 새 출처로 이동하면 `activeTab` 권한이 만료될 수 있어 확장 아이콘을 다시 눌러야 함 |
 | Windows | 활성 창 감지 OK, 정식 tray/hotkey는 Tauri 빌드 필요 |
 | macOS | 창 제목=손쉬운 사용 권한, 화면 캡처=화면 기록 권한 필요 |
 | Linux (Wayland) | 전역 활성 창 감지 제한 — portal 동의 플로우 필요 |
