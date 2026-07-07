@@ -75,6 +75,19 @@ const statusEl = document.getElementById('status')!;
 
 let collected: CollectedContext | null = null;
 
+function safePageUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return rawUrl.split(/[?#]/, 1)[0] ?? rawUrl;
+  }
+}
+
 async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -82,7 +95,7 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
 
 void activeTab().then((tab) => {
   titleEl.textContent = tab?.title ?? '(제목 없음)';
-  urlEl.textContent = tab?.url ?? '';
+  urlEl.textContent = tab?.url ? safePageUrl(tab.url) : '';
 });
 
 collectBtn.addEventListener('click', () => {
@@ -98,7 +111,7 @@ collectBtn.addEventListener('click', () => {
         func: collectDomSummaryInPage,
       });
       collected = {
-        url: tab.url,
+        url: safePageUrl(tab.url),
         title: tab.title ?? '',
         domSummary: result?.result as CollectedContext['domSummary'],
         capturedAt: new Date().toISOString(),

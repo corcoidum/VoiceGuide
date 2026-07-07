@@ -31,6 +31,35 @@ export interface ExtensionPageContext {
 
 let messageId = 0;
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isExtensionPageContext(value: unknown): value is ExtensionPageContext {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const dom = record['domSummary'];
+  const domOk =
+    dom === undefined ||
+    (typeof dom === 'object' &&
+      dom !== null &&
+      !Array.isArray(dom) &&
+      isStringArray((dom as Record<string, unknown>)['headings']) &&
+      isStringArray((dom as Record<string, unknown>)['buttons']) &&
+      isStringArray((dom as Record<string, unknown>)['links']) &&
+      isStringArray((dom as Record<string, unknown>)['inputs']) &&
+      isStringArray((dom as Record<string, unknown>)['landmarks']));
+
+  return (
+    typeof record['url'] === 'string' &&
+    typeof record['title'] === 'string' &&
+    typeof record['capturedAt'] === 'string' &&
+    domOk
+  );
+}
+
 export function useVoiceGuide() {
   /* ----------------------------- Core setup ---------------------------- */
   const orchestrator = useMemo(() => {
@@ -124,10 +153,14 @@ export function useVoiceGuide() {
 
   useEffect(() => {
     const listener = (event: MessageEvent): void => {
+      if (event.source !== window) return;
       const data = event.data as
-        | { type?: string; payload?: ExtensionPageContext }
+        | { type?: string; payload?: unknown }
         | undefined;
-      if (data?.type === 'voiceguide:context' && data.payload) {
+      if (
+        data?.type === 'voiceguide:context' &&
+        isExtensionPageContext(data.payload)
+      ) {
         setExtensionContext(data.payload);
       }
     };
@@ -306,6 +339,7 @@ export function useVoiceGuide() {
     setScreenshotPreview(null);
     setRedactedPreview(null);
     setFindings([]);
+    window.postMessage({ type: 'voiceguide:clear-context' }, window.location.origin);
   }, [orchestrator]);
 
   return {

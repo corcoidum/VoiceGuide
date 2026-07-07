@@ -10,7 +10,7 @@
 ## 빠른 시작 (API 키 불필요 — Mock Mode)
 
 ```bash
-npm install          # 의존성 설치 (Node 20+)
+npm install          # 의존성 설치 (Node 20.19+ 또는 22.12+)
 npm run dev:server   # 터미널 1: API 서버 (http://localhost:8787)
 npm run dev          # 터미널 2: 웹앱 (http://localhost:5173)
 ```

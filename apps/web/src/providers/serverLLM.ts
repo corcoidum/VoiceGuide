@@ -10,9 +10,14 @@ export class ServerLLMProvider implements LLMProvider {
   readonly name = 'server';
   private readonly fallback = new MockLLMProvider();
   private serverHealthy: boolean | null = null;
+  private lastFailureAt = 0;
+  private readonly retryAfterMs = 5000;
 
   async generateGuide(request: GuideLLMRequest): Promise<GuideResponse> {
-    if (this.serverHealthy === false) {
+    if (
+      this.serverHealthy === false &&
+      Date.now() - this.lastFailureAt < this.retryAfterMs
+    ) {
       return this.fallback.generateGuide(request);
     }
     try {
@@ -26,6 +31,7 @@ export class ServerLLMProvider implements LLMProvider {
       return (await res.json()) as GuideResponse;
     } catch {
       this.serverHealthy = false;
+      this.lastFailureAt = Date.now();
       return this.fallback.generateGuide(request);
     }
   }

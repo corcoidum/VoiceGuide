@@ -5,17 +5,37 @@
 
 function relay(context: unknown): void {
   if (!context) return;
-  window.postMessage({ type: 'voiceguide:context', payload: context }, '*');
+  window.postMessage(
+    { type: 'voiceguide:context', payload: context },
+    window.location.origin,
+  );
+}
+
+function relayAndForget(context: unknown): void {
+  relay(context);
+  if (context) void chrome.storage.local.remove('voiceguideContext');
 }
 
 // Deliver any context collected before the app tab opened.
 chrome.storage.local.get('voiceguideContext', (items) => {
-  relay(items['voiceguideContext']);
+  relayAndForget(items['voiceguideContext']);
 });
 
 // Deliver live updates while the app is open.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes['voiceguideContext']) {
-    relay(changes['voiceguideContext'].newValue);
+    relayAndForget(changes['voiceguideContext'].newValue);
+  }
+});
+
+// 웹앱의 삭제 버튼이 extension 쪽 임시 context까지 지울 수 있게 합니다.
+window.addEventListener('message', (event) => {
+  const data = event.data as { type?: string } | undefined;
+  if (
+    event.source === window &&
+    event.origin === window.location.origin &&
+    data?.type === 'voiceguide:clear-context'
+  ) {
+    void chrome.storage.local.remove('voiceguideContext');
   }
 });

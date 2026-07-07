@@ -18,7 +18,10 @@ function request(): GuideLLMRequest {
 }
 
 describe('ServerLLMProvider', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('falls back to the local mock when the server is unreachable (Mock Mode)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
@@ -44,5 +47,36 @@ describe('ServerLLMProvider', () => {
     const provider = new ServerLLMProvider();
     const res = await provider.generateGuide(request());
     expect(res.message).toBe('서버 응답');
+  });
+
+  it('retries the server after a short fallback cooldown', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-07T00:00:00Z'));
+    const fake = {
+      mode: 'ask',
+      usedGuidePack: null,
+      message: '서버 복구',
+      confidence: 0.5,
+      evidence: [],
+      needsUserConfirmation: true,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(fake) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new ServerLLMProvider();
+    const first = await provider.generateGuide(request());
+    expect(first.askedForClarification).toBe(true);
+
+    const second = await provider.generateGuide(request());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second.askedForClarification).toBe(true);
+
+    vi.advanceTimersByTime(5000);
+    const third = await provider.generateGuide(request());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(third.message).toBe('서버 복구');
   });
 });
