@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "VoiceGuide Live",
+  "version": "0.2.0",
+  "description": "지금 보고 있는 웹페이지를 실시간으로 읽고, 사이드패널에서 음성으로 사용법을 한 단계씩 안내합니다.",
+  "permissions": ["sidePanel", "storage", "scripting", "activeTab", "tabs", "tts"],
+  "host_permissions": ["http://*/*", "https://*/*", "https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "VoiceGuide 사이드패널 열기"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

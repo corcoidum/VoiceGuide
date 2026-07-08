@@ -7,12 +7,13 @@
     "packages/*",
     "apps/web",
     "apps/server",
-    "apps/extension"
+    "apps/extension",
+    "apps/guide-extension"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@voiceguide/web",
     "dev:server": "npm run dev --workspace=@voiceguide/server",
-    "build": "npm run build --workspace=@voiceguide/core && npm run build --workspace=@voiceguide/server && npm run build --workspace=@voiceguide/web && npm run build --workspace=@voiceguide/extension",
+    "build": "npm run build --workspace=@voiceguide/core && npm run build --workspace=@voiceguide/server && npm run build --workspace=@voiceguide/web && npm run build --workspace=@voiceguide/extension && npm run build --workspace=@voiceguide/guide-extension",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

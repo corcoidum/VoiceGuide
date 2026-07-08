@@ -7,10 +7,15 @@
 > 있는 도구(ChatGPT, GitHub, Google Docs)는 검증된 워크플로로, 그 외 도구는
 > 화면에서 **실제로 확인된 요소만** 사용하는 Generic Guide Mode로 안내합니다.
 
+> 🆕 **v0.2 — [`apps/guide-extension`](apps/guide-extension/README.md)**:
+> 사이드패널에서 활성 탭을 실시간으로 읽고 음성 안내하는 새 아키텍처.
+> 별도 탭·수동 컨텍스트 전달 없이, 라이브 스냅샷 + 요소 하이라이트 +
+> Claude API 직접 연결. **신규 개발은 이쪽에서 진행합니다.**
+
 ## 빠른 시작 (API 키 불필요 — Mock Mode)
 
 ```bash
-npm install          # 의존성 설치 (Node 20.19+ 또는 22.12+)
+npm install          # 의존성 설치 (Node 20+)
 npm run dev:server   # 터미널 1: API 서버 (http://localhost:8787)
 npm run dev          # 터미널 2: 웹앱 (http://localhost:5173)
 ```

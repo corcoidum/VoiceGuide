@@ -1,0 +1,14 @@
+{
+  "name": "@voiceguide/guide-extension",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/content.ts src/background.ts src/panel/main.ts --bundle --outdir=dist --outbase=src --format=iife --target=chrome120 --log-level=warning",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.0"
+  }
+}

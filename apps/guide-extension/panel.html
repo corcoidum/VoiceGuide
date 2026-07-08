@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VoiceGuide</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <header>
+    <div class="tab-info">
+      <span class="dot" id="tab-dot"></span>
+      <span id="tab-title" title="">페이지 확인 중…</span>
+    </div>
+    <div class="header-btns">
+      <button id="btn-new" title="새 대화">🗑️</button>
+      <button id="btn-settings" title="설정">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 설정 -->
+  <section id="settings" class="card hidden">
+    <h2>설정</h2>
+    <label>Anthropic API 키
+      <input id="set-key" type="password" placeholder="sk-ant-..." autocomplete="off" />
+    </label>
+    <label>모델
+      <select id="set-model"></select>
+    </label>
+    <label class="row">
+      <input id="set-tts" type="checkbox" checked /> 음성으로도 답변 듣기
+    </label>
+    <label>말하기 속도 <span id="set-rate-val">1.0x</span>
+      <input id="set-rate" type="range" min="0.6" max="2" step="0.1" value="1" />
+    </label>
+    <button id="set-save" class="primary">저장</button>
+    <p class="hint">키는 이 컴퓨터의 확장 저장소에만 보관됩니다.
+      텍스트는 전송 전 자동 마스킹되지만, 📷 스크린샷은 마스킹되지 않으니
+      민감한 화면에서는 사용하지 마세요.</p>
+  </section>
+
+  <main id="chat" aria-live="polite">
+    <div class="empty" id="empty-state">
+      <p><strong>지금 보고 있는 페이지</strong>에 대해 물어보세요.</p>
+      <div class="examples">
+        <button class="example">이 페이지에서 뭘 할 수 있어?</button>
+        <button class="example">지금 뭘 눌러야 해?</button>
+        <button class="example">처음부터 하나씩 알려줘</button>
+      </div>
+    </div>
+  </main>
+
+  <p id="error" class="error hidden" role="alert"></p>
+  <p id="privacy" class="privacy hidden"></p>
+
+  <footer>
+    <div class="quick">
+      <button data-say="완료했어">✅ 완료했어</button>
+      <button data-say="못 찾겠어">🤔 못 찾겠어</button>
+      <button data-say="더 쉽게 설명해줘">🌱 더 쉽게</button>
+      <button id="btn-replay" title="다시 듣기">🔊</button>
+      <button id="btn-stop-tts" class="hidden danger" title="음성 중단">🔇 중단</button>
+    </div>
+    <div class="input-row">
+      <button id="ptt" title="누르고 말하기">🎙️</button>
+      <input id="text-input" placeholder="질문을 입력하세요" aria-label="질문 입력" />
+      <button id="btn-shot" title="다음 질문에 화면 스크린샷 포함 (민감 화면 주의)">📷</button>
+      <button id="btn-send" class="primary">↑</button>
+    </div>
+  </footer>
+
+  <script src="dist/panel/main.js"></script>
+</body>
+</html>
